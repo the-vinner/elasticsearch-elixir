@@ -108,7 +108,7 @@ defmodule Elasticsearch.Index.Bulk do
         |> Stream.chunk_every(bulk_page_size)
         |> Stream.intersperse(bulk_wait_interval)
         |> Stream.map(&put_bulk_page(config, index_name, &1))
-        |> Enum.reduce(errors, &collect_errors/2)
+        |> Stream.run()
       end)
 
     upload(config, index_name, %{index_config | sources: tail}, errors)
@@ -121,6 +121,7 @@ defmodule Elasticsearch.Index.Bulk do
 
   defp put_bulk_page(config, index_name, items) when is_list(items) do
     Elasticsearch.put(config, "/#{index_name}/_doc/_bulk", Enum.join(items))
+    |> Logger.debug
   end
 
   defp collect_errors({:ok, %{"errors" => true} = response}, errors) do
