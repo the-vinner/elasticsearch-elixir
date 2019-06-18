@@ -59,7 +59,6 @@ defmodule Elasticsearch.Index.Bulk do
       struct
       |> Document.encode()
       |> config.json_library.encode!()
-
     "#{header}\n#{document}\n"
   end
 
@@ -108,7 +107,7 @@ defmodule Elasticsearch.Index.Bulk do
         |> Stream.chunk_every(bulk_page_size)
         |> Stream.intersperse(bulk_wait_interval)
         |> Stream.map(&put_bulk_page(config, index_name, &1))
-        |> Stream.run()
+        |> Enum.reduce(errors, &collect_errors/2)
       end)
 
     upload(config, index_name, %{index_config | sources: tail}, errors)
@@ -121,7 +120,6 @@ defmodule Elasticsearch.Index.Bulk do
 
   defp put_bulk_page(config, index_name, items) when is_list(items) do
     Elasticsearch.put(config, "/#{index_name}/_doc/_bulk", Enum.join(items))
-    |> Logger.debug
   end
 
   defp collect_errors({:ok, %{"errors" => true} = response}, errors) do
@@ -130,8 +128,8 @@ defmodule Elasticsearch.Index.Bulk do
       |> Enum.filter(&(&1["create"]["error"] != nil))
       |> Enum.map(& &1["create"])
       |> Enum.map(&Elasticsearch.Exception.exception(response: &1))
-
     new_errors ++ errors
+    |> Enum.slice(0, 1000)
   end
 
   defp collect_errors({:error, error}, errors) do
